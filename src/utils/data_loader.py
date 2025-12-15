@@ -25,6 +25,7 @@ def load_ieee_cis_data(sample_frac: Optional[float] = None) -> Tuple[pd.DataFram
     train_identity = pd.read_csv(RAW_DATA_DIR / "")
 
     #Merge transaction with identity data
+    #Use 'left' join because not all transactions have identity info
     train_df = train_transaction.merge(train_identity, on="TransactionID", how="left")
 
     print(f"Loaded {len(train_df):,} transactions")
@@ -72,7 +73,9 @@ def get_feature_types(df: pd.DataFrame) -> dict:
     }
 
 def calculate_missing_stats(df: pd.DataFrame) -> pd.DataFrame:
-    '''Calculate missing value statistics for each column'''
+    '''Calculate missing value statistics for each column
+        Returns: DataFrame with missing counts and percentages, sorted by most missing
+    '''
     missing = df.isnull().sum()
     missing_pct = (missing / len(df)) * 100
 
@@ -94,10 +97,12 @@ def reduce_memory_usage(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
     for col in df.columns:
         col_type = df[col].dtype
 
+        # Skipping non-numeric columns (strings, objects)
         if col_type != object:
             c_min = df[col].min()
             c_max = df[col].max()
 
+            # Downcast integers
             if str(col_type)[:3] == "int":
                 if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(np.int8).max:
                     df[col] = df[col].astype(np.int8)
@@ -106,6 +111,7 @@ def reduce_memory_usage(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
                 elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
                     df[col] = df[col].astype(np.int32)
 
+            # Downcast floats
             else:
                 if c_min > np.finfo(np.float16).min and c_max < np.finfo(np.float16).max:
                     df[col] = df[col].astype(np.float32)

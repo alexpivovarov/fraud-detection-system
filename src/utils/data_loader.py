@@ -22,14 +22,18 @@ def load_ieee_cis_data(sample_frac: Optional[float] = None) -> Tuple[pd.DataFram
     """
     print("Loading transaction data...")
     train_transaction = pd.read_csv(RAW_DATA_DIR / "train_transaction.csv")
-    train_identity = pd.read_csv(RAW_DATA_DIR / "")
+    train_identity = pd.read_csv(RAW_DATA_DIR / "train_identity.csv")
 
     #Merge transaction with identity data
     #Use 'left' join because not all transactions have identity info
     train_df = train_transaction.merge(train_identity, on="TransactionID", how="left")
 
     print(f"Loaded {len(train_df):,} transactions")
-    print(f"Fraud rate: {train_df["isFraud"].mean():.2%}")
+    print(f"Fraud rate: {train_df['isFraud'].mean():.2%}")
+
+    if sample_frac:
+        train_df = train_df.sample(frac=sample_frac, random_state=RANDOM_STATE)
+        print(f"Sampled to {len(train_df):,} transactions")
 
     # Check for test data
     test_transaction_path = RAW_DATA_DIR / "test_transaction.csv"
@@ -82,7 +86,7 @@ def calculate_missing_stats(df: pd.DataFrame) -> pd.DataFrame:
     stats = pd.DataFrame({
         "missing_count": missing,
         "missing_pct": missing_pct,
-        "dtype": df.types
+        "dtype": df.dtypes
     })
 
     return stats[stats["missing_count"] > 0].sort_values("missing_pct", ascending=False)

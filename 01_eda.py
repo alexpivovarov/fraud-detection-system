@@ -106,7 +106,51 @@ def run_eda():
     print("\n[4/6] Featrue Analysis")
 
     feature_types = get_feature_types(train_df)
-    
+    print(f"Numeric features: {len(feature_types['numeric'])}")
+    print(f"Categorical features: {len(feature_types['categorical'])}")
+    print(f"Binary features: {len(feature_types['categorical'])}")
+    print(f"Binary features: {len(feature_types['binary'])}")
 
+    # Handling missing values
+    print("\n[5/6] Missing Values (Top20)")
+    missing_stats = calculate_missing_stats(train_df)
+    print(missing_stats.head(20).to_string())
+
+
+    #======
+    # 5 Key feature distributions
+    #=====
+    print("\n[6/6] Generating feature distribution plots")
+
+    # Transaction amount
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+    # Amount distribution by class
+    ax1= axes[0,0]
+    for label, color in [(0, '#2ecc71', '#e74c3c')]:
+        subset = train_df[train_df['isFraud'] == label]['TransactionAmt']
+        ax1.hist(subset.clip(upper=1000), bins=50, alpha=0.6,
+                 label=f'{"Fraud" if label else "Legitimate"}', color=color)
+    ax1.set_xlabel('Transaction amount')
+    ax1.set_ylabel('Count')
+    ax1.set_title('Transaction Amount Distribution by Class')
+
+    # Log amount
+    ax2 = axes[0, 1]
+    train_df['log_amount'] = np.log1p(train_df['TransactionAmt'])
+    for label, color in [(0, '#2ecc71'), (1, '#e74c3c')]:
+        subset = train_df[train_df['isFraud'] == label]['log_amount']
+        ax2.hist(subset, bins=50, alpha=0.6,
+                 label=f'{"Fraud" if label else "Legitimate"}', color=color)
+        ax2.set_xlabel('Log(Transaction Amount)')
+        ax2.set_ylabel('Count')
+        ax2.set_title('Log Transaction Amount Distribution')
+        ax2.legend()        
+
+    # Poduct code fraud rate
+    ax3 = axes[1, 0]
+    product_fraud = train_df.groupby('ProductCD')['isFraud'].agg(['sum', 'count'])
+    product_fraud['fraud_rate'] = product_fraud['sum'] / product_fraud['count'] * 100
+    product_fraud
 
 

@@ -78,7 +78,35 @@ def run_eda():
     print(f"Imbalance ratio: 1:{fraud_counts[0] // fraud_counts[1]}")
 
     # Plot class distribution
+    fig, axes = plt.subplots(1, 2, figsize=(12,4))
 
+    # Bar plot
+    ax1 = axes[0]
+    bars = ax1.bar(['Legitimate', 'Fraudulent'], fraud_counts.values, color=['#2ecc71', '#e74c3c'])
+
+    ax1.set_ylabel('Count')
+    ax1.set_title('Transaction Class Distribution')
+    for bar, count in zip(bars, fraud_counts.values):
+        ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1000, f'{count:,}', ha='center', va='bottom')
+
+    # Pie chart
+    ax2 = axes[0]
+    ax2.pie(fraud_counts.values, labels=['Legitimate', 'Fraudulent'],
+            autopct='%1.2f%%', colors=['#2ecc71', '#e74c3c'],
+            explode = [0, 0.1])
+    ax2.set_title('Class Imbalance Visualization')
+
+    plt.tight_layout()
+    plt.savefig(PROCESSED_DATA_DIR / 'class_distribution.png', dpi=150, bbox_inches='tight')
+    plt.show()
+
+    #===========
+    # 4. Feature Analysis
+    #===========
+    print("\n[4/6] Featrue Analysis")
+
+    feature_types = get_feature_types(train_df)
+    
 
 
 

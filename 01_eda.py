@@ -21,9 +21,10 @@ import seaborn as sns
 from pathlib import Path
 import sys
 import warnings
-warnings.filterwarnings('ignore')
+warnings.filterwarnings('ignore') # Hide unnecessary warnings
 
 sys.path.append(str(Path(__file__).parent))
+
 from src.utils.data_loader import (
     load_ieee_cis_data,
     get_feature_types,
@@ -41,7 +42,7 @@ def run_eda():
     print("FRAUD DETECTION - EXPLORATORY DATA ANALYSIS")
 
     # =======================
-    # 1. Load data
+    # 1. Load data. Loads ~590K transactions from CSVs, merges them, and shrinks memory usage
     # =======================
 
     print("\n[1/6] Loading data ...")
@@ -60,12 +61,13 @@ def run_eda():
     # 2 Basic statistics
     # ===============
     print("\n[2/6] Basic statistics")
-    print(f"Total transactions: {len{train_df}:,}")
+    print(f"Total transactions: {len(train_df):,}")
     print(f"Total features: {len(train_df.columns)}")
     print(f"Memory usage: {train_df.memory_usage().sum() / 1024**2:.1f} MB")
 
     # ========
     # 3. Class Imbalance
+    # Calculates count of fraud vs legitimate, visualizes it
     # ========
     print("\n[3/6] Class Distribution (Target: isFraud)")
     print("-" * 40)
@@ -100,9 +102,10 @@ def run_eda():
     plt.savefig(PROCESSED_DATA_DIR / 'class_distribution.png', dpi=150, bbox_inches='tight')
     plt.show()
 
-    #===========
+
+    #============
     # 4. Feature Analysis
-    #===========
+    #============
     print("\n[4/6] Featrue Analysis")
 
     feature_types = get_feature_types(train_df)
@@ -117,25 +120,29 @@ def run_eda():
     print(missing_stats.head(20).to_string())
 
 
-    #======
+    #==============
     # 5 Key feature distributions
-    #=====
+    #==============
     print("\n[6/6] Generating feature distribution plots")
 
     # Transaction amount
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
     # Amount distribution by class
+    # Shows how transaction amounts differ between fraud and legitimate transactions
+
     ax1= axes[0,0]
-    for label, color in [(0, '#2ecc71', '#e74c3c')]:
+    for label, color in [(0, '#2ecc71'), (1, '#e74c3c')]:
         subset = train_df[train_df['isFraud'] == label]['TransactionAmt']
         ax1.hist(subset.clip(upper=1000), bins=50, alpha=0.6,
                  label=f'{"Fraud" if label else "Legitimate"}', color=color)
     ax1.set_xlabel('Transaction amount')
     ax1.set_ylabel('Count')
     ax1.set_title('Transaction Amount Distribution by Class')
+    ax1.legend()
 
     # Log amount
+    # Shows the same data as chart1 but log transformed
     ax2 = axes[0, 1]
     train_df['log_amount'] = np.log1p(train_df['TransactionAmt'])
     for label, color in [(0, '#2ecc71'), (1, '#e74c3c')]:
@@ -148,9 +155,53 @@ def run_eda():
         ax2.legend()        
 
     # Poduct code fraud rate
+    # Shows fraud percentage for each product category
     ax3 = axes[1, 0]
     product_fraud = train_df.groupby('ProductCD')['isFraud'].agg(['sum', 'count'])
     product_fraud['fraud_rate'] = product_fraud['sum'] / product_fraud['count'] * 100
-    product_fraud
+    product_fraud['fraud_rate'].plot(kind='bar', ax=ax3, color='#3498db')
+    ax3.set_xlabel('Product code')
+    ax3.set_ylabel('Fraud Rate (%)')
+    ax3.set_title('Fraud Rate by Product Code')
+    ax3.tick_params(axis='x', rotation=0)
+
+    # Card type fraud rate
+    # Shows fraud percetnage by card network
+    ax4 = axes[1, 1]
+    if 'card4' in train_df.columns:
+        card_fraud = train_df.groupby('card4')['isFraud'].agg(['sum', 'count'])
+        card_fraud['fraud_rate'] = card_fraud['sum'] / card_fraud['count'] * 100
+        card_fraud['fraud_rate'].sort_values(ascending=False).plot(kind='bar', ax=ax4, color='#9b59b6')
+        
+        ax4.set_xlabel('Card Type')
+        ax4.set_ylabel('Fraud Rate (%)')
+        ax4.set_title('Fraud Rate by Card Type')
+        ax4.tick_params(axis='x', rotation=45)
+
+        plt.tight_layout()
+        plt.savefig(PROCESSED_DATA_DIR / 'feature_distributions.png', dpi=150, bbox_inches='tight')
+        plt.show()
+
+    # Summary
+    print("Summary")
+        
+    summary = {
+        'n_transactions': len(train_df),
+        'n_features': len(train_df.columns),
+        'fraud_rate': train_df['isFraud'].mean(),
+        'n_missing_features': len(missing_stats),
+    }
+    pd.Series(summary).to_csv(PROCESSED_DATA_DIR / 'eda_summary.csv')
+
+    print(f"\n Plots saved to: {PROCESSED_DATA_DIR}")
+    print(f"EDA complete")
+
+    return train_df
+
+if __name__ == "__main__":
+    df = run_eda()
+
+
+    
 
 

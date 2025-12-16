@@ -15,7 +15,7 @@ for dir_path in [RAW_DATA_DIR, PROCESSED_DATA_DIR, MODELS_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)
 
 # Model parameters
-Random_state = 42
+RANDOM_STATE = 42
 Test_size = 0.2 # 20% of data for testing, 80% for training
 Validation_size = 0.1
 

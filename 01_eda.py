@@ -48,9 +48,10 @@ def run_eda():
     print("\n[1/6] Loading data ...")
 
     try:
-        train_df, _ = load_ieee_cis_data()
+        train_df, _ = load_ieee_cis_data(sample_frac=0.01)
     except FileNotFoundError:
         print("\n Dataset not found!")
+        return None
 
 
     # Reduce memory
@@ -76,8 +77,10 @@ def run_eda():
     fraud_pct = train_df['isFraud'].value_counts(normalize=True) * 100
 
     print(f"Legitimate (0): {fraud_counts[0]:,} ({fraud_pct[0]:.2f}%)")
-    print(f"Fraudulent (0): {fraud_counts[1]:,} ({fraud_pct[1]:.2f}%)")
+    print(f"Fraudulent (1): {fraud_counts[1]:,} ({fraud_pct[1]:.2f}%)")
     print(f"Imbalance ratio: 1:{fraud_counts[0] // fraud_counts[1]}")
+
+
 
     # Plot class distribution
     fig, axes = plt.subplots(1, 2, figsize=(12,4))
@@ -92,7 +95,7 @@ def run_eda():
         ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1000, f'{count:,}', ha='center', va='bottom')
 
     # Pie chart
-    ax2 = axes[0]
+    ax2 = axes[1]
     ax2.pie(fraud_counts.values, labels=['Legitimate', 'Fraudulent'],
             autopct='%1.2f%%', colors=['#2ecc71', '#e74c3c'],
             explode = [0, 0.1])
@@ -106,12 +109,11 @@ def run_eda():
     #============
     # 4. Feature Analysis
     #============
-    print("\n[4/6] Featrue Analysis")
+    print("\n[4/6] Feature Analysis")
 
     feature_types = get_feature_types(train_df)
     print(f"Numeric features: {len(feature_types['numeric'])}")
     print(f"Categorical features: {len(feature_types['categorical'])}")
-    print(f"Binary features: {len(feature_types['categorical'])}")
     print(f"Binary features: {len(feature_types['binary'])}")
 
     # Handling missing values
@@ -132,9 +134,10 @@ def run_eda():
     # Shows how transaction amounts differ between fraud and legitimate transactions
 
     ax1= axes[0,0]
+
     for label, color in [(0, '#2ecc71'), (1, '#e74c3c')]:
-        subset = train_df[train_df['isFraud'] == label]['TransactionAmt']
-        ax1.hist(subset.clip(upper=1000), bins=50, alpha=0.6,
+        subset = train_df[train_df['isFraud'] == label]['TransactionAmt'].dropna()
+        ax1.hist(subset.clip(upper=1000).head(50000), bins=50, alpha=0.6,
                  label=f'{"Fraud" if label else "Legitimate"}', color=color)
     ax1.set_xlabel('Transaction amount')
     ax1.set_ylabel('Count')
@@ -144,15 +147,15 @@ def run_eda():
     # Log amount
     # Shows the same data as chart1 but log transformed
     ax2 = axes[0, 1]
-    train_df['log_amount'] = np.log1p(train_df['TransactionAmt'])
+    train_df['log_amount'] = np.log1p(train_df['TransactionAmt']).dropna()
     for label, color in [(0, '#2ecc71'), (1, '#e74c3c')]:
         subset = train_df[train_df['isFraud'] == label]['log_amount']
-        ax2.hist(subset, bins=50, alpha=0.6,
+        ax2.hist(subset.head(50000), bins=50, alpha=0.6,
                  label=f'{"Fraud" if label else "Legitimate"}', color=color)
-        ax2.set_xlabel('Log(Transaction Amount)')
-        ax2.set_ylabel('Count')
-        ax2.set_title('Log Transaction Amount Distribution')
-        ax2.legend()        
+    ax2.set_xlabel('Log(Transaction Amount)')
+    ax2.set_ylabel('Count')
+    ax2.set_title('Log Transaction Amount Distribution')
+    ax2.legend()        
 
     # Poduct code fraud rate
     # Shows fraud percentage for each product category
@@ -178,13 +181,14 @@ def run_eda():
         ax4.set_title('Fraud Rate by Card Type')
         ax4.tick_params(axis='x', rotation=45)
 
-        plt.tight_layout()
-        plt.savefig(PROCESSED_DATA_DIR / 'feature_distributions.png', dpi=150, bbox_inches='tight')
-        plt.show()
+    plt.tight_layout()
+    plt.savefig(PROCESSED_DATA_DIR / 'feature_distributions.png', dpi=150, bbox_inches='tight')
+    plt.show()
+        
 
     # Summary
     print("Summary")
-        
+            
     summary = {
         'n_transactions': len(train_df),
         'n_features': len(train_df.columns),
@@ -192,6 +196,11 @@ def run_eda():
         'n_missing_features': len(missing_stats),
     }
     pd.Series(summary).to_csv(PROCESSED_DATA_DIR / 'eda_summary.csv')
+
+    print(f"Transactions: {summary['n_transactions']:,}")
+    print(f"Features: {summary['n_features']}")
+    print(f"Fraud rate: {summary['fraud_rate']:.2%}")
+
 
     print(f"\n Plots saved to: {PROCESSED_DATA_DIR}")
     print(f"EDA complete")

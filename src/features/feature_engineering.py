@@ -109,7 +109,7 @@ class FraudFeatureEngineer:
         
         # TransactionDT is seconds from a reference point
         df['Transaction_hour'] = (df['TransactionDT'] // 3600) % 24 # Hour of day (0-23)
-        df['Transaction_day'] = (df['TranasctionDT'] // 86400) % 7 # Day of week (0-6)
+        df['Transaction_day'] = (df['TransactionDT'] // 86400) % 7 # Day of week (0-6)
 
         # Time of day categories
         df['Transaction_is_night'] = ((df['Transaction_hour'] >= 22) | 
@@ -133,7 +133,7 @@ class FraudFeatureEngineer:
         card_std = df['card1'].map(self.card_stats.get(('TransactionAmt', 'std'), {}))
 
         # Z-score: how unusual is this amount for this card?
-        df['amount_zscore_card'] = (df['TranactionAmt'] - card_mean) / (card_std + 1)
+        df['amount_zscore_card'] = (df['TransactionAmt'] - card_mean) / (card_std + 1)
         df['amount_zscore_card'] = df['amount_zscore_card'].fillna(0)
 
         return df
@@ -176,14 +176,14 @@ class FraudFeatureEngineer:
         df = df.sort_values('TransactionDT').reset_index(drop=True)
 
         # Time since last transaction (same card)
-        df['time_since_last_txn'] = df.groupby('card1')['TranasctionDT'].diff() # calculates time snce last transaction
+        df['time_since_last_txn'] = df.groupby('card1')['TransactionDT'].diff() # calculates time snce last transaction
         df['time_since_last_txn'] = df['time_since_last_txn'].fillna(999999) # the first transaction for each card has no previous one, we fill diff with "long time ago"
 
         # Rapid succession flag (within 1 minute)
         df['rapid_txn_flag'] = (df['time_since_last_txn'] < 60).astype(int)
 
         # Transaction count per card
-        df['card1_txn_count'] = df.groupby('card1')('TransactionID').transform('count')
+        df['card1_txn_count'] = df.groupby('card1')['TransactionID'].transform('count')
 
         return df
     
@@ -192,7 +192,7 @@ class FraudFeatureEngineer:
     # Section 8: Prepare for the model
     #===
 
-    def prepare_features_for_model(df: pd.DataFrame, target_col: str = 'isFraud') -> Tuple[pd.DataFrame, pd.Series]: # takes a DataFrame and returns the feauture matrix (X) and the target variable (Y)
+    def prepare_features_for_model(self, df: pd.DataFrame, target_col: str = 'isFraud') -> Tuple[pd.DataFrame, pd.Series]: # takes a DataFrame and returns the feauture matrix (X) and the target variable (Y)
         """
         Final preparation: prepare dataset for model training by cleaning and formatting the features.
         """
@@ -206,7 +206,7 @@ class FraudFeatureEngineer:
         Y = df[target_col].copy() if target_col in df.columns else None # target vector Y
 
         # ML models need numeric input, so this converts text columns into integer codes
-        for col in X.select_dtypes(include=['object']).columns():
+        for col in X.select_dtypes(include=['object']).columns:
             X[col] = X[col].astype('category').cat.codes
 
         # Handling infinity values

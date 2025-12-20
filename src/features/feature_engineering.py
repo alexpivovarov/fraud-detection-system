@@ -192,26 +192,27 @@ class FraudFeatureEngineer:
     # Section 8: Prepare for the model
     #===
 
-    def prepare_features_for_model(df: pd.DataFrame, target_col: str = 'isFraud') -> Tuple[pd.DataFrame, pd.Series]:
+    def prepare_features_for_model(df: pd.DataFrame, target_col: str = 'isFraud') -> Tuple[pd.DataFrame, pd.Series]: # takes a DataFrame and returns the feauture matrix (X) and the target variable (Y)
         """
-        Final preparation: select features and handle remaining issues.
+        Final preparation: prepare dataset for model training by cleaning and formatting the features.
         """
-        # Columns to exclude
+        # Remove columns that shouldn't be used as features 
         exclude_cols = ['TransactionID', 'TransactionDT', target_col]
 
         # Keep only numeric columns
         feature_cols = [c for c in df.columns if c not in exclude_cols]
 
-        X = df[feature_cols].copy()
-        Y = df[target_col].copy() if target_col in df.columns else None
+        X = df[feature_cols].copy() # feature matrix
+        Y = df[target_col].copy() if target_col in df.columns else None # target vector Y
 
-        # Convert object columns to numeric
+        # ML models need numeric input, so this converts text columns into integer codes
         for col in X.select_dtypes(include=['object']).columns():
             X[col] = X[col].astype('category').cat.codes
 
-        # Fill remaining Nan with median
-        X = X.replace([np.inf, -np.inf], 0)
+        # Handling infinity values
+        X = X.replace([np.inf, -np.inf], 0) # First convert inf to NaN
+        X = X.fillna(X.median()) # Fill all NaN with median
 
         print(f"Final feature matrix: {X.shape}")
 
-        return X, y
+        return X, Y

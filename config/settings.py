@@ -44,3 +44,17 @@ REDIS_PORT = 6379
 # API
 API_HOST = "0.0.0.0"
 API_PORT = 8000
+
+# Optuna hyperparameter tuning
+
+BEST_XGBOOST_PARAMS = {
+    'n_estimators': 235,
+    'max_depth': 10,
+    'learning_rate': 0.104,
+    'scale_pos_weight': 25.35,
+    'min_child_weight': 7,
+    'subsample': 0.892,
+    'colsample_bytree': 0.948,
+    'random_state': 42,
+    'eval_metric': 'auc'
+}

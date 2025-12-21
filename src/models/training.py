@@ -93,9 +93,11 @@ if __name__ == "__main__":
     train_df, test_df = time_based_split(df)
 
 
-    print("\nApplying feature engineering ... ")
+    print("\nApplying feature engineering to training data ... ")
     engineer = FraudFeatureEngineer()
     train_df = engineer.fit_transform(train_df)
+
+    print("\nApplying feature engineering to test data ... ")
     test_df = engineer.transform(test_df)
 
     X_train, y_train = engineer.prepare_features_for_model(train_df)

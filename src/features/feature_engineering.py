@@ -206,11 +206,15 @@ class FraudFeatureEngineer:
         Y = df[target_col].copy() if target_col in df.columns else None # target vector Y
 
         # ML models need numeric input, so this converts text columns into integer codes
+        self.category_mappings = {}
         for col in X.select_dtypes(include=['object']).columns:
-            X[col] = X[col].astype('category').cat.codes
+            X[col] = X[col].astype('category')
+            # Save the mapping: value -> code
+            self.category_mappings[col] = {v: i for i, v in enumerate(X[col].cat.categories)}
+            X[col] = X[col].cat.codes
 
-        # Handling infinity values
-        X = X.replace([np.inf, -np.inf], 0) # First convert inf to NaN
+        # Handle infinity values
+        X = X.replace([np.inf, -np.inf], 0) # First convert infinity to NaN
         X = X.fillna(X.median()) # Fill all NaN with median
 
         print(f"Final feature matrix: {X.shape}")

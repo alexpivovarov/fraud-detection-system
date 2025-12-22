@@ -9,6 +9,7 @@ from kafka import KafkaConsumer
 from redis_client import FraudRedisClient
 
 MODEL_PATH = "/Users/alexpivovarov/fraud-detection-system/src/models/xgboost_model.pkl"
+MAPPINGS_PATH = "/Users/alexpivovarov/fraud-detection-system/src/models/category_mappings.pkl"
 
 def create_consumer(topic: str = 'transactions'):
     '''Create Kafka consumer.'''
@@ -21,7 +22,7 @@ def create_consumer(topic: str = 'transactions'):
     )
     return consumer
 
-def prepare_features(transaction: dict, feature_names: list) -> pd.DataFrame:
+def prepare_features(transaction: dict, feature_names: list, category_mappings: dict) -> pd.DataFrame:
     '''
     Prepare features to match model's expected output
     '''
@@ -32,7 +33,7 @@ def prepare_features(transaction: dict, feature_names: list) -> pd.DataFrame:
             if pd.isna(value):
                 features[key] = 0
             elif isinstance(value, str):
-                features[key] = hash(value) % 10000 # Convert string to numeric code
+                features[key] = category_mappings[key].get(value, -1) # use saved mapping, -1 for unseen values
             else:
                 features[key] = value
 
@@ -48,6 +49,7 @@ def consume_transactions():
     # Load model
     print(f"Loading model from {MODEL_PATH}...")
     model = joblib.load(MODEL_PATH)
+    category_mappings = joblib.load(MAPPINGS_PATH)
     feature_names = model.get_booster().feature_names
     print(f"Model loaded! Expects {len(feature_names)} features")
 
@@ -69,7 +71,7 @@ def consume_transactions():
 
         # Make prediciton
         try:
-            features = prepare_features(transaction, feature_names)
+            features = prepare_features(transaction, feature_names, category_mappings)
             probability = model.predict_proba(features)[0][1]
 
             if probability > 0.7: # Our tuned threshold

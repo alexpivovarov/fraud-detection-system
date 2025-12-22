@@ -192,4 +192,5 @@ if __name__ == "__main__":
     best_threshold = tune_threshold(y_test, y_pred_proba)
 
     joblib.dump(final_model, 'src/models/xgboost_model.pkl')
-    print("Model saved to src/models/xgboost_model.pkl")
+    joblib.dump(engineer.category_mappings, 'src/models/category_mappings.pkl')
+    print("Model and mappings saved")

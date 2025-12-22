@@ -10,6 +10,7 @@ from sklearn.metrics import classification_report, roc_auc_score, confusion_matr
 import xgboost as xgb
 import sys
 import optuna
+import joblib
 
 # Adding project's root directory to Python's import path so we can import from other folders in the project
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -189,3 +190,6 @@ if __name__ == "__main__":
     print(f"Final ROC-AUC: {roc_auc_score(y_test, y_pred_proba):.4f}")
     
     best_threshold = tune_threshold(y_test, y_pred_proba)
+
+    joblib.dump(final_model, 'src/models/xgboost_model.pkl')
+    print("Model saved to src/models/xgboost_model.pkl")

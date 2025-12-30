@@ -191,6 +191,15 @@ if __name__ == "__main__":
     
     best_threshold = tune_threshold(y_test, y_pred_proba)
 
+    # Save everything needed for inference as a bundle
+    model_bundle = {
+        'model': final_model,
+        'feature_names': list(X_train.columns),
+        'category_mappings': engineer.category_mappings,
+        'best_threshold': best_threshold,
+        'best_params': best_params
+    }
+
     joblib.dump(final_model, 'src/models/xgboost_model.pkl')
     joblib.dump(engineer.category_mappings, 'src/models/category_mappings.pkl')
     print("Model and mappings saved")

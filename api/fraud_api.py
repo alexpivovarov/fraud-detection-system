@@ -15,15 +15,16 @@ import sys
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.inference.predictor import FraudPredictor
 from src.streaming.redis_client import FraudRedisClient
 
 
 # Global variables for model and redis (None initially, then populated when the app starts)
-model = None
+predictor = None
 redis_client = None
 
 # Load model at startup
-MODEL_PATH = Path(__file__).parent.parent / "src" / "models" / "xgboost_model.pkl"
+MODEL_BUNDLE_PATH = Path(__file__).parent.parent / "src" / "models" / "fraud_model_bundle.pkl"
 
 
 @asynccontextmanager
@@ -42,19 +43,18 @@ async def lifespan(app: FastAPI):
          ↓
     Code AFTER yield runs (cleanup)
     '''
-    global model, redis_client
+    global predictor, redis_client
 
     # Startup
     try:
-        model = joblib.load(MODEL_PATH)
-        print(f"Model loaded from {MODEL_PATH}")
+        predictor = FraudPredictor(str(MODEL_BUNDLE_PATH))
     except FileNotFoundError:
-        print(f"Warning: Model not found at {MODEL_PATH}")
+        print(f"Warning: Model bundle not found at {MODEL_BUNDLE_PATH}")
 
     try:
         redis_client = FraudRedisClient()
     except Exception as e:
-        print(f"Warning: Could not connect to Redis")
+        print(f"Warning: Could not connect to Redis: {e}")
 
     yield # App runs here
 
@@ -93,28 +93,6 @@ class FraudDetection(BaseModel):
     risk_level: str
     threshold: float
 
-def prepare_features(df: pd.DataFrame, velocity_features: dict) -> pd.DataFrame:
-        '''
-        Transforms raw transaction data into the features the model expects.
-        Must match training feature set.
-        '''
-        # Add velocity features
-        df['txn_count_recent'] = velocity_features.get('txn_count_recent', 0)
-        df['avg_amount_recent'] = velocity_features.get('avg_amount_recent', 0)
-
-        # Add basic engineered features
-        df['TransactionAmt_log'] = np.log1p(df['TransactionAmt'])
-
-        # Select only numeric columns the model expects
-        feature_cols = ['TransactionAmt', 'TransactionAmt_log', 'card1', 'txn_count_recent', 'avg_amount_recent']
-
-        # Fill missing with 0
-        for col in feature_cols:
-            if col not in df.columns:
-                df[col] = 0
-
-        return df[feature_cols]
-
 @app.get("/")
 def root():
     return {"message": "Fraud Detection API", "status": "running"}
@@ -123,7 +101,7 @@ def root():
 def health_check():
     return {
         "status": "healthy",
-        "model_loaded": model is not None,
+        "model_loaded": predictor is not None,
         "redis_connected": redis_client is not None
     }
 
@@ -149,53 +127,34 @@ def predict_fraud(transaction: Transaction):
         ↓
     9. Return FraudDetection response
     '''
-    if model is None:
+    if predictor is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
-    
-    # Convert to DataFrame (model expects this format)
-    tx_dict = transaction.model_dump()
-    df = pd.DataFrame([tx_dict])
 
     # Get velocity features from Redis if available
     velocity_features= {}
     if redis_client:
         try:
-            card_id = str(transaction.card1)
-            velocity_features = redis_client.get_velocity_features(card_id)
+            velocity_features = redis_client.get_velocity_features(str(transaction.card1))
         except Exception:
             pass
 
-    # Prepare features
-    features = prepare_features(df, velocity_features)
-
-    # Predict
-    fraud_prob = model.predict_proba(features)[0][1]
-
-    # Apply threshold
-    threshold = 0.70
-    is_fraud = fraud_prob >= threshold
-
-    # Determine risk level
-    if fraud_prob >= 0.8:
-        risk_level = "High"
-    elif fraud_prob >= 0.5:
-        risk_level = "Medium"
-    else:
-        risk_level = "Low"
+    # Use predictor (single source of truth)
+    result = predictor.predict(transaction.model_dump(), velocity_features)
+    
 
     # Update Redis with this transaction
     if redis_client:
         try:
-            redis_client.update_card_profile(str(transaction.card1), tx_dict) # Send data to Redis server over the network
+            redis_client.update_card_profile(str(transaction.card1), transaction.model_dump()) # Send data to Redis server over the network
         except Exception:
             pass
 
     return FraudDetection(
         transaction_id = transaction.TransactionID,
-        fraud_probability=round(fraud_prob, 4),
-        is_fraud=is_fraud,
-        risk_level=risk_level,
-        threshold=threshold
+        fraud_probability=round(result['fraud_probability'], 4),
+        is_fraud = result['is_fraud'],
+        risk_level = result['risk_level'],
+        threshold = result['threshold']
     ) 
 
     

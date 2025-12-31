@@ -93,6 +93,12 @@ class FraudPredictor:
             if col not in df.columns:
                 df[col] = 0
 
+        # Convert object columns to numeric (XGBoost doesn't accept strings)
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                # Convert to category codes, fill NaN with -1
+                df[col] = pd.Categorical(df[col]).codes
+
         # Return columns in exact order model expects
         return df[self.feature_names]
     

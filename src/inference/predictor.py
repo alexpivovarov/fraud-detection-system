@@ -88,19 +88,25 @@ class FraudPredictor:
     def _align_features(self, df: pd.DataFrame) -> pd.DataFrame:
         '''Ensure DataFrame has exact features model expects, in correct order'''
 
-        # Add missing columns with 0
+        # Create dict with all features, defaulting missing ones to 0
+        aligned_data = {}
         for col in self.feature_names:
-            if col not in df.columns:
-                df[col] = 0
+            if col in df.columns:
+                aligned_data[col] = df[col].values[0]
+            else:
+                aligned_data[col] = 0
+
+        # Create new DataFrame at once (avoids fragmentation)
+        result = pd.DataFrame([aligned_data])
 
         # Convert object columns to numeric (XGBoost doesn't accept strings)
-        for col in df.columns:
-            if df[col].dtype == 'object':
+        for col in result.columns:
+            if result[col].dtype == 'object':
                 # Convert to category codes, fill NaN with -1
-                df[col] = pd.Categorical(df[col]).codes
+                result[col] = pd.Categorical(result[col]).codes
 
         # Return columns in exact order model expects
-        return df[self.feature_names]
+        return result[self.feature_names]
     
     def _get_risk_level(self, prob: float) -> str:
         if prob >= 0.8:

@@ -2,14 +2,20 @@
 Kafka Consumer - reads transactions from Kafka and processes them
 '''
 
+import sys
 import json
 import joblib
 import pandas as pd
+from pathlib import Path
 from kafka import KafkaConsumer
-from redis_client import FraudRedisClient
 
-MODEL_PATH = "/Users/alexpivovarov/fraud-detection-system/src/models/xgboost_model.pkl"
-MAPPINGS_PATH = "/Users/alexpivovarov/fraud-detection-system/src/models/category_mappings.pkl"
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from src.inference.predictor import FraudPredictor
+from src.streaming.redis_client import FraudRedisClient
+
+MODEL_BUNDLE_PATH = Path(__file__).parent.parent / "models" / "fraud_model_bundle.pkl"
 
 def create_consumer(topic: str = 'transactions'):
     '''Create Kafka consumer.'''
@@ -22,23 +28,6 @@ def create_consumer(topic: str = 'transactions'):
     )
     return consumer
 
-def prepare_features(transaction: dict, feature_names: list, category_mappings: dict) -> pd.DataFrame:
-    '''
-    Prepare features to match model's expected output
-    '''
-    features = {name: 0 for name in feature_names}
-
-    for key, value in transaction.items():
-        if key in features:
-            if pd.isna(value):
-                features[key] = 0
-            elif isinstance(value, str):
-                features[key] = category_mappings[key].get(value, -1) # use saved mapping, -1 for unseen values
-            else:
-                features[key] = value
-
-    return pd.DataFrame([features])
-
 def consume_transactions():
     '''
     Consume transactions from Kafka and process them.
@@ -46,13 +35,9 @@ def consume_transactions():
     consumer = create_consumer()
     redis_client = FraudRedisClient()
 
-    # Load model
-    print(f"Loading model from {MODEL_PATH}...")
-    model = joblib.load(MODEL_PATH)
-    category_mappings = joblib.load(MAPPINGS_PATH)
-    feature_names = model.get_booster().feature_names
-    print(f"Model loaded! Expects {len(feature_names)} features")
-
+    # Load predictor (same as API uses)
+    print(f"Loading model from {MODEL_BUNDLE_PATH}...")
+    predictor = FraudPredictor(str(MODEL_BUNDLE_PATH))
 
     print("Listening for transactions...")
 
@@ -63,24 +48,28 @@ def consume_transactions():
         transaction = message.value # extracting transaction dict
         card_id = str(transaction.get('card1', 'unknown')) # get the cardID or 'unknown' if missing
 
-        # Update Redis
+        # Get velocity features from Redis
+        velocity_features = redis_client.get_velocity_features(card_id)
+
+        # Update Redis with this transaction
         profile = redis_client.update_card_profile(card_id, transaction)
         redis_client.add_transaction_to_history(card_id, transaction)
 
         total_count += 1
 
-        # Make prediciton
+        # Make prediciton using predictor
         try:
-            features = prepare_features(transaction, feature_names, category_mappings)
-            probability = model.predict_proba(features)[0][1]
+            result = predictor.predict(transaction, velocity_features)
 
-            if probability > 0.7: # Our tuned threshold
+            if result['is_fraud']:
                 fraud_count += 1
-                print(f"Fraud! TransactionID={transaction.get('TransactionID')},"
-                      f"Amount=${transaction.get('TransactionAmt', 0):.2f}, "
-                      f"Prob={probability:.2%}")
+                print(f"FRAUD ALERT! TransactionID={transaction.get('TransactionID')},"
+                        f"Amount=${transaction.get('TransactionAmt', 0):.2f}, "
+                        f"Prob={result['fraud_probability']:.2%}, "
+                        f"Risk={result['risk_level']}")
             elif total_count % 500 == 0:
                 print(f"Processed {total_count}, {fraud_count} fraud alerts")
+
         except Exception as e:
             if total_count % 1000 == 0:
                 print(f"Error: {e}")
